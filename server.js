@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(express.static(require('path').join(__dirname, '../frontend')));
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
