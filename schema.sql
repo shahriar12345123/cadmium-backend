@@ -37,7 +37,11 @@ CREATE TABLE users (
 CREATE INDEX idx_users_referrer ON users(referrer_id);
 
 -- 4. Create referrals Table
+-- The referral system dynamically uses the Telegram User ID.
+-- The user's Telegram ID serves directly as their referral code (appended to deep links: https://t.me/bot?start=TG_ID).
+-- When a user registers, their referrer_id is mapped to the referrer's Telegram ID.
 CREATE TABLE referrals (
+
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, -- The referrer
     referred_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, -- The invited user

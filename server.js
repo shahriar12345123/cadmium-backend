@@ -15,6 +15,25 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const BOT_USERNAME_ENV = process.env.TELEGRAM_BOT_USERNAME || 'cadmium390_bot';
+let botUsername = BOT_USERNAME_ENV;
+
+async function initBotInfo() {
+  if (BOT_TOKEN && !BOT_TOKEN.includes('MockBotToken')) {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
+      const data = await res.json();
+      if (data.ok && data.result && data.result.username) {
+        botUsername = data.result.username;
+        console.log(`🤖 Telegram Bot username loaded: @${botUsername}`);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch bot details from Telegram API, using env fallback:", e.message);
+    }
+  }
+}
+initBotInfo();
+
 
 // Upgrade Configuration for Cadmium Mining Core
 const UPGRADES = [
@@ -89,14 +108,27 @@ function verifyTelegramInitData(initData) {
     .sort()
     .map((k) => `${k}=${result[k]}`)
     .join('\n');
-  const secret = crypto.createHash('sha256').update(BOT_TOKEN).digest();
+  const secret = crypto.createHash('sha256').update(BOT_TOKEN || '').digest();
   const hmac = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
-  return hmac === hash ? result : null;
-}
-
-// Check if we are running in local/development environment bypass mode
-function isDevMode() {
-  return !BOT_TOKEN || BOT_TOKEN.includes('MockBotToken');
+  if (hmac === hash) {
+    if (result.user) {
+      try {
+        const userObj = JSON.parse(result.user);
+        return {
+          ...result,
+          id: userObj.id,
+          first_name: userObj.first_name,
+          last_name: userObj.last_name,
+          username: userObj.username,
+          language_code: userObj.language_code
+        };
+      } catch (e) {
+        console.error("Failed to parse user JSON in verifyTelegramInitData:", e);
+      }
+    }
+    return result;
+  }
+  return null;
 }
 
 // Telegram Join Check Helper
@@ -212,20 +244,10 @@ async function handleUserAuth(payload, referrerIdStr) {
   return newUser;
 }
 
-// Middleware to authenticate via initData (with dev mode bypass)
+// Middleware to authenticate via initData (Strict verified Telegram only)
 async function authMiddleware(req, res, next) {
-  const { initData, mockUser } = req.body;
-  let payload = verifyTelegramInitData(initData);
-
-  if (!payload && isDevMode()) {
-    if (mockUser && mockUser.id) {
-      payload = {
-        id: mockUser.id.toString(),
-        first_name: mockUser.first_name || 'Mock Operator',
-        username: mockUser.username || 'mock_operator'
-      };
-    }
-  }
+  const { initData } = req.body;
+  const payload = verifyTelegramInitData(initData);
 
   if (!payload) {
     return res.status(401).json({ error: 'Invalid or missing authentication coordinates' });
@@ -244,18 +266,8 @@ async function authMiddleware(req, res, next) {
 
 // Auth endpoint
 app.post('/api/auth', async (req, res) => {
-  const { initData, referrerId, mockUser } = req.body;
-  let payload = verifyTelegramInitData(initData);
-
-  if (!payload && isDevMode()) {
-    if (mockUser && mockUser.id) {
-      payload = {
-        id: mockUser.id.toString(),
-        first_name: mockUser.first_name || 'Mock Operator',
-        username: mockUser.username || 'mock_operator'
-      };
-    }
-  }
+  const { initData, referrerId } = req.body;
+  const payload = verifyTelegramInitData(initData);
 
   if (!payload) {
     return res.status(401).json({ error: 'Invalid or missing authentication coordinates' });
@@ -263,7 +275,7 @@ app.post('/api/auth', async (req, res) => {
 
   try {
     const user = await handleUserAuth(payload, referrerId);
-    return res.json({ user });
+    return res.json({ user, botUsername });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
