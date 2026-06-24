@@ -108,9 +108,16 @@ function verifyTelegramInitData(initData) {
     .sort()
     .map((k) => `${k}=${result[k]}`)
     .join('\n');
-  const secret = crypto.createHash('sha256').update(BOT_TOKEN || '').digest();
-  const hmac = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
-  if (hmac === hash) {
+
+  // Method 1: Official Telegram WebApp HMAC verification
+  const secretKeyOfficial = crypto.createHmac('sha256', 'WebAppData').update(BOT_TOKEN || '').digest();
+  const hmacOfficial = crypto.createHmac('sha256', secretKeyOfficial).update(dataCheckString).digest('hex');
+
+  // Method 2: Fallback SHA256 verification (original codebase method)
+  const secretKeyFallback = crypto.createHash('sha256').update(BOT_TOKEN || '').digest();
+  const hmacFallback = crypto.createHmac('sha256', secretKeyFallback).update(dataCheckString).digest('hex');
+
+  if (hmacOfficial === hash || hmacFallback === hash) {
     if (result.user) {
       try {
         const userObj = JSON.parse(result.user);
