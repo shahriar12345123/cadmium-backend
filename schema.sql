@@ -26,15 +26,29 @@ CREATE TABLE users (
     last_tap_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     last_passive_claim_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  cadmium NUMERIC(20,2) DEFAULT 0.00,
-  mining_start_at TIMESTAMP WITH TIME ZONE,
-  mining_end_at TIMESTAMP WITH TIME ZONE,
-  mining_level INT DEFAULT 1,
-  boost_multiplier NUMERIC(5,2) DEFAULT 1.00
+    cadmium NUMERIC(20,2) DEFAULT 0.00,
+    mining_start_at TIMESTAMP WITH TIME ZONE,
+    mining_end_at TIMESTAMP WITH TIME ZONE,
+    mining_level INT DEFAULT 1,
+    boost_multiplier NUMERIC(5,2) DEFAULT 1.00,
+    referral_code TEXT GENERATED ALWAYS AS (id::TEXT) STORED
 );
 
 -- Index for referrals
 CREATE INDEX idx_users_referrer ON users(referrer_id);
+
+-- Enable Row Level Security on users table
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- Policy: users can SELECT their own row
+CREATE POLICY users_select_self ON users
+  FOR SELECT
+  USING (id = current_setting('app.current_telegram_id', true)::bigint);
+
+-- Policy: users can INSERT a row only for themselves (id must match the Telegram ID set in session)
+CREATE POLICY users_insert_self ON users
+  FOR INSERT
+  WITH CHECK (id = current_setting('app.current_telegram_id', true)::bigint);
 
 -- 4. Create referrals Table
 -- The referral system dynamically uses the Telegram User ID.
